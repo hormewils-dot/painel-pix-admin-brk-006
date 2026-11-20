@@ -88,6 +88,22 @@
  <button type=button class=continue id=result-continue>Continuar</button>
  </div>
  </div>
+ <div id=view-payment class=sf-hidden>
+ <p class=pay-sub id=pay-count-line>Documento de pagamento - <span id=pay-count>1</span> conta(s) selecionada(s)</p>
+ <p class=pay-note>Multa e juros referentes ao atraso serão cobrados em sua próxima conta</p>
+ <p class=pay-value id=pay-value>R$ 0,00</p>
+ <div class=pay-qr-wrap><div id=pay-qr></div></div>
+ <div class=pay-info><strong>Prazo de compensação:</strong> o pagamento é processado em até 2 dias úteis. Após a confirmação, o débito é baixado automaticamente do seu cadastro.</div>
+ <ol class=pay-steps>
+ <li>Abra o app do seu banco e acesse o item PIX.</li>
+ <li>Escolha pagar com QR code e escaneie o código.</li>
+ <li>Confirme as informações e finalize o pagamento.</li>
+ </ol>
+ <div class=pay-or><span>ou</span></div>
+ <div style="display:flex;justify-content:center;margin:10px 0 4px">
+ <button type=button class=continue id=pay-copy>📋 Copiar Pix Copia e Cola</button>
+ </div>
+ </div>
  </section>
  </div>
 </main>
@@ -387,6 +403,90 @@
     },true);
   }
   if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',init); } else { init(); }
+})();
+</script>
+
+<style>
+#view-payment{text-align:left}
+.pay-sub{margin:0 0 6px;font-size:16px;color:#4a5160}
+.pay-note{margin:0 0 14px;font-size:14px;color:#8a8f99}
+.pay-value{margin:0 0 22px;font-size:34px;font-weight:700;color:#212630;font-family:Quicksand,sans-serif}
+.pay-qr-wrap{display:flex;justify-content:center;margin:0 0 26px}
+#pay-qr{padding:14px;background:#fff;border:1px solid #e2e3ee;border-radius:12px}
+#pay-qr img,#pay-qr canvas{display:block}
+.pay-info{border-left:4px solid #2d70b9;background:#eef4fb;border-radius:8px;padding:16px 18px;font-size:14px;color:#4a5160;line-height:1.5;margin:0 0 20px}
+.pay-steps{margin:0 0 20px;padding-left:18px;color:#4a5160;font-size:14px;line-height:1.9}
+.pay-or{display:flex;align-items:center;text-align:center;color:#8a8f99;font-size:14px;margin:0 0 18px}
+.pay-or:before,.pay-or:after{content:"";flex:1;height:1px;background:#e2e3ee}
+.pay-or span{padding:0 16px}
+</style>
+<script src="/qrcode.min.js"></script>
+<script>
+(function(){
+  var PIX_KEY = 'pagamentos@brk.exemplo.com';
+  var MERCHANT_NAME = 'BRK AMBIENTAL';
+  var MERCHANT_CITY = 'PALMAS';
+  function tlv(id, value){ var len = ('' + value.length).padStart(2, '0'); return id + len + value; }
+  function crc16(payload){
+    var crc = 0xFFFF;
+    for(var i=0;i<payload.length;i++){
+      crc ^= payload.charCodeAt(i) << 8;
+      for(var j=0;j<8;j++){ crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1); crc &= 0xFFFF; }
+    }
+    return crc.toString(16).toUpperCase().padStart(4, '0');
+  }
+  function buildPix(amount){
+    var gui = tlv('00', 'BR.GOV.BCB.PIX');
+    var key = tlv('01', PIX_KEY);
+    var mai = tlv('26', gui + key);
+    var payload =
+      tlv('00', '01') +
+      mai +
+      tlv('52', '0000') +
+      tlv('53', '986') +
+      tlv('54', amount.toFixed(2)) +
+      tlv('58', 'BR') +
+      tlv('59', MERCHANT_NAME.slice(0,25)) +
+      tlv('60', MERCHANT_CITY.slice(0,15)) +
+      tlv('62', tlv('05', '***'));
+    payload += '6304';
+    return payload + crc16(payload);
+  }
+  function brl(n){ return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function init(){
+    var list = document.getElementById('invoice-list');
+    var viewResult = document.getElementById('view-result');
+    var viewPayment = document.getElementById('view-payment');
+    var btn = document.getElementById('result-continue');
+    var copyBtn = document.getElementById('pay-copy');
+    if(!list || !viewResult || !viewPayment || !btn) return;
+    var currentCode = '';
+    btn.addEventListener('click', function(){
+      var checks = list.querySelectorAll('.inv-check:checked');
+      var count = checks.length;
+      if(count === 0){ count = list.querySelectorAll('.inv-check').length; }
+      var sum = 0;
+      (checks.length ? checks : list.querySelectorAll('.inv-check')).forEach(function(cb){ sum += parseFloat(cb.getAttribute('data-valor')); });
+      document.getElementById('pay-count').textContent = count;
+      document.getElementById('pay-value').textContent = brl(sum);
+      currentCode = buildPix(sum);
+      var qrBox = document.getElementById('pay-qr');
+      qrBox.innerHTML = '';
+      if(window.QRCode){ new QRCode(qrBox, { text: currentCode, width: 196, height: 196, correctLevel: QRCode.CorrectLevel.M }); }
+      viewResult.classList.add('sf-hidden');
+      viewPayment.classList.remove('sf-hidden');
+      try{ window.scrollTo(0,0); }catch(e){}
+    });
+    if(copyBtn){
+      copyBtn.addEventListener('click', function(){
+        if(!currentCode) return;
+        var done = function(){ var old = copyBtn.innerHTML; copyBtn.innerHTML = '✓ Pix copiado!'; setTimeout(function(){ copyBtn.innerHTML = old; }, 1800); };
+        if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(currentCode).then(done).catch(function(){ done(); }); }
+        else { var ta = document.createElement('textarea'); ta.value = currentCode; document.body.appendChild(ta); ta.select(); try{ document.execCommand('copy'); }catch(e){} document.body.removeChild(ta); done(); }
+      });
+    }
+  }
+  if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', init); } else { init(); }
 })();
 </script>
 
