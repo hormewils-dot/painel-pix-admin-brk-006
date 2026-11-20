@@ -321,9 +321,9 @@
   function invoicesFor(city){
     var v=(city && CITY_VALUES[city]) ? CITY_VALUES[city] : DEFAULT_VALUES;
     return [
+      {mes:'12/2026',status:'Em aberto',venc:'05/12/2026',valor:v[2]},
       {mes:'10/2026',status:'Atrasada',venc:'05/10/2026',valor:v[0]},
-      {mes:'11/2026',status:'Atrasada',venc:'05/11/2026',valor:v[1]},
-      {mes:'12/2026',status:'Em aberto',venc:'05/12/2026',valor:v[2]}
+      {mes:'11/2026',status:'Atrasada',venc:'05/11/2026',valor:v[1]}
     ];
   }
   function brl(n){ return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
